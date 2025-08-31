@@ -8,3 +8,4 @@ sudo dnf install fontconfig java-21-openjdk -y
 sudo dnf install jenkins -y
 sudo systemctl enable jenkins
 sudo systemctl start jenkins
+sudo systemctl status jenkins
