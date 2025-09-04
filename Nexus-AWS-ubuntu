@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+
+# 1. Update packages and install Java (OpenJDK 17 recommended)
+sudo apt update -y
+sudo apt install -y openjdk-17-jre-headless wget
+
+# 2. Create Nexus user
+sudo adduser --system --no-create-home --group nexus
+
+# 3. Download and extract Nexus
+cd /opt
+sudo wget -O nexus.tar.gz https://download.sonatype.com/nexus/3/nexus-3.79.1-04-linux-x86_64.tar.gz
+sudo tar -xzvf nexus.tar.gz
+LATEST=$(ls -d nexus-3* | head -n 1)
+sudo mv "$LATEST" nexus
+sudo rm nexus.tar.gz
+
+# 4. Fix ownership
+sudo chown -R nexus:nexus /opt/nexus
+sudo chown -R nexus:nexus /opt/sonatype-work || true
+
+# 5. Set Nexus to run as nexus user
+sudo tee /opt/nexus/bin/nexus.rc > /dev/null <<EOF
+run_as_user="nexus"
+EOF
+sudo chown nexus:nexus /opt/nexus/bin/nexus.rc
+
+# 6. Create systemd service
+sudo tee /etc/systemd/system/nexus.service > /dev/null <<EOF
+[Unit]
+Description=Nexus Repository Manager
+After=network.target
+
+[Service]
+Type=forking
+LimitNOFILE=65536
+User=nexus
+Group=nexus
+ExecStart=/opt/nexus/bin/nexus start
+ExecStop=/opt/nexus/bin/nexus stop
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 7. Enable and start service
+sudo systemctl daemon-reload
+sudo systemctl enable nexus
+sudo systemctl start nexus
+
+echo "Nexus installation complete. Access the UI at: http://<EC2_PUBLIC_IP>:8081"
+echo "Default admin password: $(sudo cat /opt/sonatype-work/nexus3/admin.password 2>/dev/null || echo \"(check /opt/sonatype-work/nexus3/admin.password)\")"
